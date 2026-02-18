@@ -275,12 +275,9 @@ class ExtremeCorrection(BlueMathModel):
         self.n_year_sim = self.sim_am_data.shape[0]
 
         # Avoid correct when AM is 0
-        self.am_idx_0 = 0
-        for idx, value in enumerate(np.sort(self.am_data)):
-            if value == 0:
-                self.am_index_0 += 1
-            else:
-                break
+        self.am_idx_0 = np.argwhere(np.sort(self.am_data) > 0)[0][0]
+        # Avoid correct when AM is 0 in simulated data
+        self.am_idx_0_sim = np.argwhere(np.sort(self.sim_am_data) > 0)[0][0]
 
         # Test if the correction has to be applied
         test_result = self.test()
@@ -294,7 +291,7 @@ class ExtremeCorrection(BlueMathModel):
 
             return
         else:
-            self.sim_am_data_corr = np.zeros(self.n_year_sim)
+            self.sim_am_data_corr = np.sort(self.sim_am_data)
 
             # Define probs
             if prob == "unif":
@@ -308,17 +305,19 @@ class ExtremeCorrection(BlueMathModel):
 
             # Apply correction on AM
             if self.method == "pot":
-                # TODO: Añadir funciones de POT
-                self.sim_am_data_corr[self.am_idx_0 :] = GPDPoiss.qf(
-                    self.rprob_sim[self.am_idx_0 :],
+                # TODO: Check this
+                # Avoid to correct where AM is lower than threshold
+                self.am_idx_0_sim = np.argwhere(np.sort(self.sim_am_data) > self.parameters[0])[0][0]
+                self.sim_am_data_corr[self.am_idx_0_sim :] = GPDPoiss.qf(
+                    self.rprob_sim[self.am_idx_0_sim :],
                     threshold=self.parameters[0],
                     scale=self.parameters[1],
                     shape=self.parameters[2],
                     poisson=self.poiss_parameter,
                 )
             elif self.method == "am":
-                self.sim_am_data_corr[self.am_idx_0 :] = GEV.qf(
-                    self.rprob_sim[self.am_idx_0 :],
+                self.sim_am_data_corr[self.am_idx_0_sim :] = GEV.qf(
+                    self.rprob_sim[self.am_idx_0_sim :],
                     loc=self.parameters[0],
                     scale=self.parameters[1],
                     shape=self.parameters[2],
@@ -398,9 +397,11 @@ class ExtremeCorrection(BlueMathModel):
         var : list[str]
             List of variables to apply the correction technique. FUTURE WORK: INCLUDE MORE THAN ONE
         bmus : list[bool, str], default=[False, ""]
-            List to decide if the correction must be applied by WT and if so name of the variable
+            List to decide if the correction must be applied by WT and if so, name of the variable
         join_sims : bool, default=True
             Whether to joint all the simulations in one array
+        sim : bool, default=True
+            Whether the data is synthetic or historical
 
         Return
         ------
@@ -708,7 +709,7 @@ class ExtremeCorrection(BlueMathModel):
             alpha=0.8,
             label="Corrected Sampled Annual Maxima",
         )
-        # Corrected Sampled AM values
+        # No-Corrected Sampled AM values
         ax.semilogx(
             self.T_annmax_sim,
             np.sort(self.sim_am_data),
